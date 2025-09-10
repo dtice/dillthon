@@ -1,0 +1,11 @@
+[project]
+name = "dillthon-music-visualizer"
+version = "0.1.0"
+description = "A simple PyQt6 music visualizer"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+	"PyQt6",
+	"numpy",
+	"soundfile",
+]
