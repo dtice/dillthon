@@ -18,25 +18,27 @@ class FlamesVisualizer(BaseVisualizer):
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding
         )
-        self.n_bars = 40
-        self.bar_values = [0] * self.n_bars
+        self.n_flames = 24
+        self.flame_heights = np.zeros(self.n_flames)
+        self.flame_flicker = np.random.uniform(0.2, 0.5, self.n_flames)
         self._running_max = 1.0
         self.samplerate = 44100
-        self.flame_history = np.zeros((60, self.n_bars))  # 60 rows of flame
+        self.flame_waves = np.random.uniform(0, 2 * np.pi, self.n_flames)
+        self.phase = 0.0
 
     def sizeHint(self):
-        return QtCore.QSize(400, 300)
+        return QtCore.QSize(500, 350)
 
     def update_visualization(self, samples):
-        n_bars = self.n_bars
+        n_flames = self.n_flames
         n_fft = len(samples)
-        min_freq = 20
-        max_freq = 20000
+        min_freq = 40
+        max_freq = 8000
         samplerate = getattr(self, 'samplerate', 44100)
         freqs = np.fft.rfftfreq(n_fft * 2 - 1, 1.0 / samplerate)
-        band_edges = np.logspace(np.log10(min_freq), np.log10(max_freq), n_bars + 1)
+        band_edges = np.logspace(np.log10(min_freq), np.log10(max_freq), n_flames + 1)
         band_energies = []
-        for i in range(n_bars):
+        for i in range(n_flames):
             idx = np.where((freqs >= band_edges[i]) & (freqs < band_edges[i+1]))[0]
             idx = idx[idx < len(samples)]
             if len(idx) > 0:
@@ -46,17 +48,15 @@ class FlamesVisualizer(BaseVisualizer):
             band_energies.append(np.log10(band_energy + 1e-3))
         current_max = max(band_energies)
         self._running_max = max(self._running_max * 0.95, current_max)
-        for i in range(n_bars):
+        # Flicker base
+        self.flame_flicker = 0.7 * self.flame_flicker + 0.3 * np.random.uniform(0.2, 0.5, n_flames)
+        # FFT controls height
+        for i in range(n_flames):
             norm = band_energies[i] / (self._running_max + 1e-6)
-            self.bar_values[i] = min(1.0, max(0.0, norm))
-        # Animate flames: scroll up, add new row at bottom
-        self.flame_history = np.roll(self.flame_history, -1, axis=0)
-        # Base flicker at 1/3rd height
-        base_flicker = np.random.uniform(0.3, 0.5, size=n_bars)
-        # Overlay FFT energy on top of base flicker
-        flame_row = base_flicker + np.array(self.bar_values) * np.random.uniform(0.95, 1.05, size=n_bars)
-        flame_row = np.clip(flame_row, 0, 1)
-        self.flame_history[-1, :] = flame_row
+            # Height: base flicker + FFT, with some random wave
+            wave = 0.15 * np.sin(self.phase + self.flame_waves[i] + i * 0.5)
+            self.flame_heights[i] = np.clip(self.flame_flicker[i] + norm * 1.2 + wave, 0.05, 1.0)
+        self.phase += 0.2
         self.update()
 
     def paintEvent(self, event):
@@ -65,23 +65,43 @@ class FlamesVisualizer(BaseVisualizer):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         painter.fillRect(rect, QtGui.QColor('black'))
         h, w = rect.height(), rect.width()
-        n_bars = self.n_bars
-        n_rows = self.flame_history.shape[0]
-        bar_width = w / n_bars
-        row_height = h / n_rows
-        for r in range(n_rows):
-            for b in range(n_bars):
-                value = self.flame_history[r, b]
-                # Flame color: interpolate from dark red to yellow-white
-                hue = int(20 + value * 40)  # 20=red, 60=yellow
-                sat = int(200 - value * 100)
-                val = int(80 + value * 175)
-                color = QtGui.QColor.fromHsv(hue, sat, val)
-                x = int(b * bar_width)
-                y = int(h - (r + 1) * row_height)
-                bw = int(bar_width) if b < n_bars - 1 else w - int(b * bar_width)
-                rh = int(row_height) if r < n_rows - 1 else h - int(r * row_height)
-                painter.fillRect(x, y, bw, rh, color)
+        n_flames = self.n_flames
+        flame_width = w / n_flames
+        base_y = h - 10
+        for i in range(n_flames):
+            # Flame contour: wavy, organic
+            height = self.flame_heights[i] * (h * 0.7)
+            tip_x = int((i + 0.5) * flame_width + np.random.uniform(-flame_width * 0.2, flame_width * 0.2))
+            tip_y = int(base_y - height)
+            left_x = int(i * flame_width)
+            right_x = int((i + 1) * flame_width)
+            # Control points for curve
+            ctrl1_x = int(left_x + flame_width * 0.3)
+            ctrl1_y = int(base_y - height * np.random.uniform(0.3, 0.6))
+            ctrl2_x = int(right_x - flame_width * 0.3)
+            ctrl2_y = int(base_y - height * np.random.uniform(0.3, 0.6))
+            path = QtGui.QPainterPath()
+            path.moveTo(left_x, base_y)
+            path.cubicTo(ctrl1_x, ctrl1_y, ctrl2_x, ctrl2_y, tip_x, tip_y)
+            path.lineTo(right_x, base_y)
+            path.closeSubpath()
+            # Color gradient: base red/orange, tip yellow/white
+            grad = QtGui.QLinearGradient(left_x, base_y, tip_x, tip_y)
+            grad.setColorAt(0.0, QtGui.QColor(180, 30, 10))
+            grad.setColorAt(0.5, QtGui.QColor(255, 120, 10))
+            grad.setColorAt(0.8, QtGui.QColor(255, 220, 80))
+            grad.setColorAt(1.0, QtGui.QColor(255, 255, 220))
+            painter.setBrush(QtGui.QBrush(grad))
+            painter.setPen(QtCore.Qt.PenStyle.NoPen)
+            painter.drawPath(path)
+        # Optionally, add some glow at the base
+        glow_rect = QtCore.QRect(0, base_y - 10, w, 20)
+        glow_grad = QtGui.QLinearGradient(0, base_y, 0, base_y + 20)
+        glow_grad.setColorAt(0.0, QtGui.QColor(255, 180, 60, 120))
+        glow_grad.setColorAt(1.0, QtGui.QColor(0, 0, 0, 0))
+        painter.setBrush(QtGui.QBrush(glow_grad))
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.drawRect(glow_rect)
         painter.end()
 
 class CircleVisualizer(BaseVisualizer):
