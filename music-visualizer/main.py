@@ -1,6 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets, QtMultimedia
 from PyQt6.QtCore import Qt
-from widgets.visualizers import WaterfallVisualizer, SpectrogramVisualizer, BarVisualizer, VisualizerState
+from widgets.visualizers import WaterfallVisualizer, SpectrogramVisualizer, BarVisualizer, CircleVisualizer, VisualizerState
 from widgets.music_player import MusicControls
 
 import numpy as np
@@ -26,11 +26,13 @@ class MainWindow(QtWidgets.QMainWindow):
         """Set up the visualizer state and connect it to the chosen visualizer."""
         self.state = VisualizerState()
         if visualizer_type == 'waterfall':
-            self.bar = WaterfallVisualizer()
+            self.visualizer = WaterfallVisualizer()
         elif visualizer_type == 'spectrogram':
-            self.bar = SpectrogramVisualizer()
+            self.visualizer = SpectrogramVisualizer()
+        elif visualizer_type == 'circular_bars':
+            self.visualizer = CircleVisualizer()
         else:
-            self.bar = BarVisualizer()
+            self.visualizer = BarVisualizer()
 
     def _setup_player(self):
         """Set up the audio player and output device."""
@@ -67,7 +69,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Visualizer selector dropdown
         self.vis_selector = QtWidgets.QComboBox()
-        self.vis_selector.addItems(["Waterfall", "Spectrogram", "Bars"])
+        self.vis_selector.addItems(["Waterfall", "Spectrogram", "Bars", "Circular Bars"])
         self.vis_selector.setCurrentIndex(0)
         self.vis_selector.currentIndexChanged.connect(self._on_vis_type_changed)
         layout.addWidget(self.vis_selector)
@@ -76,25 +78,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.vis_container = QtWidgets.QWidget()
         self.vis_layout = QtWidgets.QVBoxLayout(self.vis_container)
         self.vis_layout.setContentsMargins(0, 0, 0, 0)
-        self.vis_layout.addWidget(self.bar)
+        self.vis_layout.addWidget(self.visualizer)
         layout.addWidget(self.vis_container)
 
         self.music_controls = MusicControls(self.player, self.audio_output, self.open_file)
         layout.addWidget(self.music_controls)
 
     def _on_vis_type_changed(self, idx):
-        types = ['waterfall', 'spectrogram', 'bars']
+        types = ['waterfall', 'spectrogram', 'bars', 'circular_bars']
         self.visualizer_type = types[idx]
         # Remove old visualizer
-        old_bar = self.bar
+        old_bar = self.visualizer
         self.vis_layout.removeWidget(old_bar)
         old_bar.setParent(None)
         # Create new visualizer
         self._setup_visualizer(self.visualizer_type)
-        self.vis_layout.addWidget(self.bar)
+        self.vis_layout.addWidget(self.visualizer)
         # Pass samplerate if available
-        if hasattr(self.bar, 'samplerate') and self.samplerate:
-            self.bar.samplerate = self.samplerate
+        if hasattr(self.visualizer, 'samplerate') and self.samplerate:
+            self.visualizer.samplerate = self.samplerate
 
     def _setup_menu(self):
         """Set up menu bar and actions."""
@@ -150,9 +152,9 @@ class MainWindow(QtWidgets.QMainWindow):
             # FFT
             fft = np.abs(np.fft.rfft(samples))
             # Pass samplerate to visualizer for correct frequency mapping
-            if hasattr(self.bar, 'update_visualization'):
-                self.bar.samplerate = self.samplerate
-                self.bar.update_visualization(fft)
+            if hasattr(self.visualizer, 'update_visualization'):
+                self.visualizer.samplerate = self.samplerate
+                self.visualizer.update_visualization(fft)
 
     def _on_duration_changed(self, duration):
         self.music_controls.seek_slider.setMaximum(100)

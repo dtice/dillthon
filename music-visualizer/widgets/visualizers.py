@@ -9,6 +9,78 @@ class BaseVisualizer(QtWidgets.QWidget):
     def update_visualization(self, samples):
         """Update the visualizer with new audio samples (to be implemented by subclasses)."""
         pass
+    
+class CircleVisualizer(BaseVisualizer):
+    """Visualizer with FFT bars arranged radially around a central circle."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding
+        )
+        self.n_bars = 40
+        self.bar_values = [0] * self.n_bars
+        self._running_max = 1.0
+        self.samplerate = 44100
+
+    def sizeHint(self):
+        return QtCore.QSize(400, 400)
+
+    def update_visualization(self, samples):
+        n_bars = self.n_bars
+        n_fft = len(samples)
+        min_freq = 20
+        max_freq = 20000
+        samplerate = getattr(self, 'samplerate', 44100)
+        freqs = np.fft.rfftfreq(n_fft * 2 - 1, 1.0 / samplerate)
+        band_edges = np.logspace(np.log10(min_freq), np.log10(max_freq), n_bars + 1)
+        band_energies = []
+        for i in range(n_bars):
+            idx = np.where((freqs >= band_edges[i]) & (freqs < band_edges[i+1]))[0]
+            idx = idx[idx < len(samples)]
+            if len(idx) > 0:
+                band_energy = np.mean(samples[idx])
+            else:
+                band_energy = 0
+            band_energies.append(np.log10(band_energy + 1e-3))
+        current_max = max(band_energies)
+        self._running_max = max(self._running_max * 0.95, current_max)
+        for i in range(n_bars):
+            norm = band_energies[i] / (self._running_max + 1e-6)
+            self.bar_values[i] = min(1.0, max(0.0, norm))
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        rect = self.rect()
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        painter.fillRect(rect, QtGui.QColor('black'))
+
+        # Circle parameters
+        cx = rect.center().x()
+        cy = rect.center().y()
+        radius = min(rect.width(), rect.height()) // 4
+        # Draw central circle
+        painter.setBrush(QtGui.QColor(60, 60, 60))
+        painter.setPen(QtGui.QColor(120, 120, 120))
+        painter.drawEllipse(QtCore.QPoint(cx, cy), radius, radius)
+
+        # Draw bars radially
+        n_bars = self.n_bars
+        bar_length = radius
+        bar_width = max(2, int(np.pi * radius / n_bars // 2))
+        for i, value in enumerate(self.bar_values):
+            angle = 2 * np.pi * i / n_bars
+            # Start/end points for each bar
+            x0 = cx + int(np.cos(angle) * radius)
+            y0 = cy + int(np.sin(angle) * radius)
+            x1 = cx + int(np.cos(angle) * (radius + int(value * bar_length)))
+            y1 = cy + int(np.sin(angle) * (radius + int(value * bar_length)))
+            color = QtGui.QColor.fromHsv(int(240 - value * 240), 255, int(100 + value * 155))
+            pen = QtGui.QPen(color, bar_width)
+            painter.setPen(pen)
+            painter.drawLine(x0, y0, x1, y1)
+        painter.end()
 
 class SpectrogramVisualizer(BaseVisualizer):
     """Static spectrogram visualizer (shows entire audio as a 2D heatmap)."""
