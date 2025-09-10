@@ -25,8 +25,12 @@ class MusicControls(QtWidgets.QWidget):
         self.seek_slider = QtWidgets.QSlider(Qt.Orientation.Horizontal)
         self.seek_slider.setMinimum(0)
         self.seek_slider.setMaximum(100)
-        self.seek_slider.sliderMoved.connect(self._seek)
+        self.seek_slider.sliderMoved.connect(self._on_slider_moved)
+        self.seek_slider.sliderPressed.connect(self._on_slider_pressed)
+        self.seek_slider.sliderReleased.connect(self._on_slider_released)
         layout.addWidget(self.seek_slider)
+        self._is_seeking = False
+
 
         self.device_combo = QtWidgets.QComboBox()
         self.device_combo.setMinimumWidth(150)
@@ -61,12 +65,23 @@ class MusicControls(QtWidgets.QWidget):
             self.player.pause()
             self.play_button.setText("Play")
 
-    def _seek(self, position):
+    def _on_slider_pressed(self):
+        self._is_seeking = True
+
+    def _on_slider_moved(self, position):
+        # Optionally, update UI or show preview, but do not seek yet
+        pass
+
+    def _on_slider_released(self):
+        position = self.seek_slider.value()
         duration = self.player.duration()
         if duration > 0:
             self.player.setPosition(int(position / 100 * duration))
+        self._is_seeking = False
 
     def update_seek(self):
+        if self._is_seeking:
+            return
         duration = self.player.duration()
         if duration > 0:
             pos = self.player.position()

@@ -9,7 +9,81 @@ class BaseVisualizer(QtWidgets.QWidget):
     def update_visualization(self, samples):
         """Update the visualizer with new audio samples (to be implemented by subclasses)."""
         pass
-    
+
+class FlamesVisualizer(BaseVisualizer):
+    """2D flames visualizer: vertical columns animated like flames based on FFT energy."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding
+        )
+        self.n_bars = 40
+        self.bar_values = [0] * self.n_bars
+        self._running_max = 1.0
+        self.samplerate = 44100
+        self.flame_history = np.zeros((60, self.n_bars))  # 60 rows of flame
+
+    def sizeHint(self):
+        return QtCore.QSize(400, 300)
+
+    def update_visualization(self, samples):
+        n_bars = self.n_bars
+        n_fft = len(samples)
+        min_freq = 20
+        max_freq = 20000
+        samplerate = getattr(self, 'samplerate', 44100)
+        freqs = np.fft.rfftfreq(n_fft * 2 - 1, 1.0 / samplerate)
+        band_edges = np.logspace(np.log10(min_freq), np.log10(max_freq), n_bars + 1)
+        band_energies = []
+        for i in range(n_bars):
+            idx = np.where((freqs >= band_edges[i]) & (freqs < band_edges[i+1]))[0]
+            idx = idx[idx < len(samples)]
+            if len(idx) > 0:
+                band_energy = np.mean(samples[idx])
+            else:
+                band_energy = 0
+            band_energies.append(np.log10(band_energy + 1e-3))
+        current_max = max(band_energies)
+        self._running_max = max(self._running_max * 0.95, current_max)
+        for i in range(n_bars):
+            norm = band_energies[i] / (self._running_max + 1e-6)
+            self.bar_values[i] = min(1.0, max(0.0, norm))
+        # Animate flames: scroll up, add new row at bottom
+        self.flame_history = np.roll(self.flame_history, -1, axis=0)
+        # Base flicker at 1/3rd height
+        base_flicker = np.random.uniform(0.3, 0.5, size=n_bars)
+        # Overlay FFT energy on top of base flicker
+        flame_row = base_flicker + np.array(self.bar_values) * np.random.uniform(0.95, 1.05, size=n_bars)
+        flame_row = np.clip(flame_row, 0, 1)
+        self.flame_history[-1, :] = flame_row
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        rect = self.rect()
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        painter.fillRect(rect, QtGui.QColor('black'))
+        h, w = rect.height(), rect.width()
+        n_bars = self.n_bars
+        n_rows = self.flame_history.shape[0]
+        bar_width = w / n_bars
+        row_height = h / n_rows
+        for r in range(n_rows):
+            for b in range(n_bars):
+                value = self.flame_history[r, b]
+                # Flame color: interpolate from dark red to yellow-white
+                hue = int(20 + value * 40)  # 20=red, 60=yellow
+                sat = int(200 - value * 100)
+                val = int(80 + value * 175)
+                color = QtGui.QColor.fromHsv(hue, sat, val)
+                x = int(b * bar_width)
+                y = int(h - (r + 1) * row_height)
+                bw = int(bar_width) if b < n_bars - 1 else w - int(b * bar_width)
+                rh = int(row_height) if r < n_rows - 1 else h - int(r * row_height)
+                painter.fillRect(x, y, bw, rh, color)
+        painter.end()
+
 class CircleVisualizer(BaseVisualizer):
     """Visualizer with FFT bars arranged radially around a central circle."""
     def __init__(self, *args, **kwargs):

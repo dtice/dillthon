@@ -1,6 +1,6 @@
 from PyQt6 import QtCore, QtGui, QtWidgets, QtMultimedia
 from PyQt6.QtCore import Qt
-from widgets.visualizers import WaterfallVisualizer, SpectrogramVisualizer, BarVisualizer, CircleVisualizer, VisualizerState
+from widgets.visualizers import WaterfallVisualizer, SpectrogramVisualizer, BarVisualizer, CircleVisualizer, FlamesVisualizer, VisualizerState
 from widgets.music_player import MusicControls
 
 import numpy as np
@@ -31,6 +31,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.visualizer = SpectrogramVisualizer()
         elif visualizer_type == 'circular_bars':
             self.visualizer = CircleVisualizer()
+        elif visualizer_type == 'flames':
+            self.visualizer = FlamesVisualizer()
         else:
             self.visualizer = BarVisualizer()
 
@@ -69,7 +71,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Visualizer selector dropdown
         self.vis_selector = QtWidgets.QComboBox()
-        self.vis_selector.addItems(["Waterfall", "Spectrogram", "Bars", "Circular Bars"])
+        self.vis_selector.addItems(["Waterfall", "Spectrogram", "Bars", "Circular Bars", "Flames"])
         self.vis_selector.setCurrentIndex(0)
         self.vis_selector.currentIndexChanged.connect(self._on_vis_type_changed)
         layout.addWidget(self.vis_selector)
@@ -85,7 +87,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.music_controls)
 
     def _on_vis_type_changed(self, idx):
-        types = ['waterfall', 'spectrogram', 'bars', 'circular_bars']
+        types = ['waterfall', 'spectrogram', 'bars', 'circular_bars', 'flames']
         self.visualizer_type = types[idx]
         # Remove old visualizer
         old_bar = self.visualizer
