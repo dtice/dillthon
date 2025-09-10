@@ -1,6 +1,7 @@
 from PyQt6 import QtCore, QtGui, QtWidgets, QtMultimedia
 from PyQt6.QtCore import Qt
-from widgets.visualizers import WaterfallVisualizer, SpectrogramVisualizer, _BarVisualizer, VisualizerState
+from widgets.visualizers import WaterfallVisualizer, SpectrogramVisualizer, BarVisualizer, VisualizerState
+from widgets.music_player import MusicControls
 
 import numpy as np
 import soundfile as sf
@@ -29,7 +30,7 @@ class MainWindow(QtWidgets.QMainWindow):
         elif visualizer_type == 'spectrogram':
             self.bar = SpectrogramVisualizer()
         else:
-            self.bar = _BarVisualizer()
+            self.bar = BarVisualizer()
 
     def _setup_player(self):
         """Set up the audio player and output device."""

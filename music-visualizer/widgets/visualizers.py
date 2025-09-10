@@ -193,7 +193,7 @@ class WaterfallVisualizer(BaseVisualizer):
                 painter.fillRect(x, y, bw, th, color)
         painter.end()
 
-class _BarVisualizer(BaseVisualizer):
+class BarVisualizer(BaseVisualizer):
     """Custom widget for a stacked bar visualization."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -202,7 +202,7 @@ class _BarVisualizer(BaseVisualizer):
             QtWidgets.QSizePolicy.Policy.MinimumExpanding
         )
         self.visualizer_state = VisualizerState()
-        self.bar_values = [0] * 96  # 10 frequency bands
+        self.bar_values = [0] * 10  # 10 frequency bands
         self._running_max = 1.0
 
     def sizeHint(self):
